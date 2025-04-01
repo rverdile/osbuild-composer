@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"os"
 	"reflect"
 
 	"github.com/google/uuid"
@@ -1104,6 +1105,7 @@ func (request *ComposeRequest) GetSubscription() (sub *subscription.ImageOptions
 		if request.Customizations.Subscription.Rhc != nil {
 			rhc = *request.Customizations.Subscription.Rhc
 		}
+		proxy := os.Getenv("INSIGHTS_CLIENT_PROXY")
 		sub = &subscription.ImageOptions{
 			Organization:  request.Customizations.Subscription.Organization,
 			ActivationKey: request.Customizations.Subscription.ActivationKey,
@@ -1111,6 +1113,7 @@ func (request *ComposeRequest) GetSubscription() (sub *subscription.ImageOptions
 			BaseUrl:       request.Customizations.Subscription.BaseUrl,
 			Insights:      request.Customizations.Subscription.Insights,
 			Rhc:           rhc,
+			Proxy:         proxy,
 		}
 	}
 
