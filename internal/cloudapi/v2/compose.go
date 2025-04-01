@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"os"
 	"reflect"
 
 	"github.com/google/uuid"
@@ -1098,14 +1097,14 @@ func (request *ComposeRequest) GetPayloadRepositories() (repos []Repository) {
 
 // GetSubscription returns an ImageOptions struct populated by the subscription information
 // included in the request, or nil if it has not been included.
-func (request *ComposeRequest) GetSubscription() (sub *subscription.ImageOptions) {
+func (request *ComposeRequest) GetSubscription(insightsClientProxy string) (sub *subscription.ImageOptions) {
 	if request.Customizations != nil && request.Customizations.Subscription != nil {
 		// Rhc is optional, default to false if not included
 		var rhc bool
 		if request.Customizations.Subscription.Rhc != nil {
 			rhc = *request.Customizations.Subscription.Rhc
 		}
-		proxy := os.Getenv("INSIGHTS_CLIENT_PROXY")
+
 		sub = &subscription.ImageOptions{
 			Organization:  request.Customizations.Subscription.Organization,
 			ActivationKey: request.Customizations.Subscription.ActivationKey,
@@ -1113,7 +1112,7 @@ func (request *ComposeRequest) GetSubscription() (sub *subscription.ImageOptions
 			BaseUrl:       request.Customizations.Subscription.BaseUrl,
 			Insights:      request.Customizations.Subscription.Insights,
 			Rhc:           rhc,
-			Proxy:         proxy,
+			Proxy:         insightsClientProxy,
 		}
 	}
 
@@ -1141,7 +1140,7 @@ func (request *ComposeRequest) GetPartitioningMode() (disk.PartitioningMode, err
 
 // GetImageRequests converts a composeRequest structure from the API to an intermediate imageRequest structure
 // that's used for generating manifests and orchestrating worker jobs.
-func (request *ComposeRequest) GetImageRequests(distroFactory *distrofactory.Factory, repoRegistry *reporegistry.RepoRegistry) ([]imageRequest, error) {
+func (request *ComposeRequest) GetImageRequests(distroFactory *distrofactory.Factory, repoRegistry *reporegistry.RepoRegistry, insightsClientProxy string) ([]imageRequest, error) {
 	// OpenAPI enforces blueprint or customization, not both
 	// but check anyway
 	if request.Customizations != nil && request.Blueprint != nil {
@@ -1240,7 +1239,7 @@ func (request *ComposeRequest) GetImageRequests(distroFactory *distrofactory.Fac
 		}
 
 		// Set Subscription from the compose request
-		imageOptions.Subscription = request.GetSubscription()
+		imageOptions.Subscription = request.GetSubscription(insightsClientProxy)
 
 		// Set PartitioningMode from the compose request
 		imageOptions.PartitioningMode, err = request.GetPartitioningMode()

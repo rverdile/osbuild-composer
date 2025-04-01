@@ -167,7 +167,7 @@ func (c *Composer) InitMetricsAPI(prometheus net.Listener) {
 	c.promListener = prometheus
 }
 
-func (c *Composer) InitAPI(cert, key string, enableTLS bool, enableMTLS bool, enableJWT bool, l net.Listener) error {
+func (c *Composer) InitAPI(cert, key string, enableTLS bool, enableMTLS bool, enableJWT bool, insightsClientProxy string, l net.Listener) error {
 	config := v2.ServerConfig{
 		JWTEnabled:           c.config.Koji.EnableJWT,
 		TenantProviderFields: c.config.Koji.JWTTenantProviderFields,

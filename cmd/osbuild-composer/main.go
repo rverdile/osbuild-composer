@@ -146,7 +146,7 @@ func main() {
 		}
 
 		// Start cloudapi using the 2nd socket and no certs
-		err = composer.InitAPI(ServerCertFile, ServerKeyFile, false, false, false, l[1])
+		err = composer.InitAPI(ServerCertFile, ServerKeyFile, false, false, false, config.InsightsClientProxy, l[1])
 		if err != nil {
 			logrus.Fatalf("Error initializing Cloud API using local socket: %v", err)
 		}
@@ -173,7 +173,7 @@ func main() {
 			logrus.Fatal("The osbuild-composer-api.socket unit is misconfigured. It should contain only one socket.")
 		}
 
-		err = composer.InitAPI(ServerCertFile, ServerKeyFile, config.Koji.EnableTLS, config.Koji.EnableMTLS, config.Koji.EnableJWT, l[0])
+		err = composer.InitAPI(ServerCertFile, ServerKeyFile, config.Koji.EnableTLS, config.Koji.EnableMTLS, config.Koji.EnableJWT, config.InsightsClientProxy, l[0])
 		if err != nil {
 			logrus.Fatalf("Error initializing koji API: %v", err)
 		}
