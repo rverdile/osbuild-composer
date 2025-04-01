@@ -5,10 +5,11 @@ import (
 	"github.com/osbuild/images/pkg/datasizes"
 	"github.com/osbuild/images/pkg/distro"
 	"github.com/osbuild/images/pkg/distro/rhel"
-	"github.com/osbuild/images/pkg/rpmmd"
 )
 
-const vmdkKernelOptions = "ro net.ifnames=0"
+func vmdkKernelOptions() []string {
+	return []string{"ro", "net.ifnames=0"}
+}
 
 func mkVMDKImgType() *rhel.ImageType {
 	it := rhel.NewImageType(
@@ -16,7 +17,7 @@ func mkVMDKImgType() *rhel.ImageType {
 		"disk.vmdk",
 		"application/x-vmdk",
 		map[string]rhel.PackageSetFunc{
-			rhel.OSPkgsKey: vmdkCommonPackageSet,
+			rhel.OSPkgsKey: packageSetLoader,
 		},
 		rhel.DiskImage,
 		[]string{"build"},
@@ -27,7 +28,7 @@ func mkVMDKImgType() *rhel.ImageType {
 	it.DefaultImageConfig = &distro.ImageConfig{
 		Locale: common.ToPtr("en_US.UTF-8"),
 	}
-	it.KernelOptions = vmdkKernelOptions
+	it.KernelOptions = vmdkKernelOptions()
 	it.Bootable = true
 	it.DefaultSize = 4 * datasizes.GibiByte
 	it.BasePartitionTables = defaultBasePartitionTables
@@ -41,7 +42,7 @@ func mkOVAImgType() *rhel.ImageType {
 		"image.ova",
 		"application/ovf",
 		map[string]rhel.PackageSetFunc{
-			rhel.OSPkgsKey: vmdkCommonPackageSet,
+			rhel.OSPkgsKey: packageSetLoader,
 		},
 		rhel.DiskImage,
 		[]string{"build"},
@@ -52,30 +53,10 @@ func mkOVAImgType() *rhel.ImageType {
 	it.DefaultImageConfig = &distro.ImageConfig{
 		Locale: common.ToPtr("en_US.UTF-8"),
 	}
-	it.KernelOptions = vmdkKernelOptions
+	it.KernelOptions = vmdkKernelOptions()
 	it.Bootable = true
 	it.DefaultSize = 4 * datasizes.GibiByte
 	it.BasePartitionTables = defaultBasePartitionTables
 
 	return it
-}
-
-func vmdkCommonPackageSet(t *rhel.ImageType) rpmmd.PackageSet {
-	ps := rpmmd.PackageSet{
-		Include: []string{
-			"@core",
-			"chrony",
-			"cloud-init",
-			"firewalld",
-			"langpacks-en",
-			"open-vm-tools",
-			"tuned",
-		},
-		Exclude: []string{
-			"dracut-config-rescue",
-			"rng-tools",
-		},
-	}
-
-	return ps
 }

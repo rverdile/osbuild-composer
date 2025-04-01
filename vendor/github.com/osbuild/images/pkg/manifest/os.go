@@ -35,9 +35,9 @@ import (
 //	can always be applied.
 type OSCustomizations struct {
 
-	// Packages to install in addition to the ones required by the
-	// pipeline.
-	ExtraBasePackages []string
+	// Packages to install in addition to the ones required by the pipeline.
+	// These are the statically defined packages for the image type.
+	BasePackages []string
 
 	// Packages to exclude from the base package set. This is useful in
 	// case of weak dependencies, comps groups, or where multiple packages
@@ -99,35 +99,36 @@ type OSCustomizations struct {
 	ShellInit []shell.InitFile
 
 	// TODO: drop osbuild types from the API
-	Firewall            *osbuild.FirewallStageOptions
-	Grub2Config         *osbuild.GRUB2Config
-	Sysconfig           []*osbuild.SysconfigStageOptions
-	SystemdLogind       []*osbuild.SystemdLogindStageOptions
-	CloudInit           []*osbuild.CloudInitStageOptions
-	Modprobe            []*osbuild.ModprobeStageOptions
-	DracutConf          []*osbuild.DracutConfStageOptions
-	SystemdUnit         []*osbuild.SystemdUnitStageOptions
-	Authselect          *osbuild.AuthselectStageOptions
-	SELinuxConfig       *osbuild.SELinuxConfigStageOptions
-	Tuned               *osbuild.TunedStageOptions
-	Tmpfilesd           []*osbuild.TmpfilesdStageOptions
-	PamLimitsConf       []*osbuild.PamLimitsConfStageOptions
-	Sysctld             []*osbuild.SysctldStageOptions
-	DNFConfig           []*osbuild.DNFConfigStageOptions
-	DNFAutomaticConfig  *osbuild.DNFAutomaticConfigStageOptions
-	YUMConfig           *osbuild.YumConfigStageOptions
-	YUMRepos            []*osbuild.YumReposStageOptions
-	SshdConfig          *osbuild.SshdConfigStageOptions
-	GCPGuestAgentConfig *osbuild.GcpGuestAgentConfigOptions
-	AuthConfig          *osbuild.AuthconfigStageOptions
-	PwQuality           *osbuild.PwqualityConfStageOptions
-	NTPServers          []osbuild.ChronyConfigServer
-	WAAgentConfig       *osbuild.WAAgentConfStageOptions
-	UdevRules           *osbuild.UdevRulesStageOptions
-	WSLConfig           *osbuild.WSLConfStageOptions
-	LeapSecTZ           *string
-	Presets             []osbuild.Preset
-	ContainersStorage   *string
+	Firewall             *osbuild.FirewallStageOptions
+	Grub2Config          *osbuild.GRUB2Config
+	Sysconfig            []*osbuild.SysconfigStageOptions
+	SystemdLogind        []*osbuild.SystemdLogindStageOptions
+	CloudInit            []*osbuild.CloudInitStageOptions
+	Modprobe             []*osbuild.ModprobeStageOptions
+	DracutConf           []*osbuild.DracutConfStageOptions
+	SystemdUnit          []*osbuild.SystemdUnitStageOptions
+	Authselect           *osbuild.AuthselectStageOptions
+	SELinuxConfig        *osbuild.SELinuxConfigStageOptions
+	Tuned                *osbuild.TunedStageOptions
+	Tmpfilesd            []*osbuild.TmpfilesdStageOptions
+	PamLimitsConf        []*osbuild.PamLimitsConfStageOptions
+	Sysctld              []*osbuild.SysctldStageOptions
+	DNFConfig            []*osbuild.DNFConfigStageOptions
+	DNFAutomaticConfig   *osbuild.DNFAutomaticConfigStageOptions
+	YUMConfig            *osbuild.YumConfigStageOptions
+	YUMRepos             []*osbuild.YumReposStageOptions
+	SshdConfig           *osbuild.SshdConfigStageOptions
+	GCPGuestAgentConfig  *osbuild.GcpGuestAgentConfigOptions
+	AuthConfig           *osbuild.AuthconfigStageOptions
+	PwQuality            *osbuild.PwqualityConfStageOptions
+	NTPServers           []osbuild.ChronyConfigServer
+	WAAgentConfig        *osbuild.WAAgentConfStageOptions
+	UdevRules            *osbuild.UdevRulesStageOptions
+	WSLConfig            *osbuild.WSLConfStageOptions
+	InsightsClientConfig *osbuild.InsightsClientConfigStageOptions
+	LeapSecTZ            *string
+	Presets              []osbuild.Preset
+	ContainersStorage    *string
 
 	// OpenSCAP config
 	OpenSCAPRemediationConfig *oscap.RemediationConfig
@@ -157,6 +158,10 @@ type OSCustomizations struct {
 	// Determines if the machine id should be set to "uninitialized" which allows
 	// "ConditionFirstBoot" to work in systemd
 	MachineIdUninitialized bool
+
+	// MountUnits creates systemd .mount units to describe the filesystem
+	// instead of writing to /etc/fstab
+	MountUnits bool
 }
 
 // OS represents the filesystem tree of the target image. This roughly
@@ -215,44 +220,45 @@ func NewOS(buildPipeline Build, platform platform.Platform, repos []rpmmd.RepoCo
 }
 
 func (p *OS) getPackageSetChain(Distro) []rpmmd.PackageSet {
-	packages := p.platform.GetPackages()
+	platformPackages := p.platform.GetPackages()
+
+	var environmentPackages []string
+	if p.Environment != nil {
+		environmentPackages = p.Environment.GetPackages()
+	}
+
+	var partitionTablePackages []string
+	if p.PartitionTable != nil {
+		partitionTablePackages = p.PartitionTable.GetBuildPackages()
+	}
 
 	if p.KernelName != "" {
-		packages = append(packages, p.KernelName)
+		// kernel is considered part of the platform package set
+		platformPackages = append(platformPackages, p.KernelName)
 	}
 
-	// If we have a logical volume we need to include the lvm2 package.
-	// OSTree-based images (commit and container) aren't bootable images and
-	// don't have partition tables.
-	if p.PartitionTable != nil && p.OSTreeRef == "" {
-		packages = append(packages, p.PartitionTable.GetBuildPackages()...)
-	}
-
-	if p.Environment != nil {
-		packages = append(packages, p.Environment.GetPackages()...)
-	}
-
+	customizationPackages := make([]string, 0)
 	if len(p.NTPServers) > 0 {
-		packages = append(packages, "chrony")
+		customizationPackages = append(customizationPackages, "chrony")
 	}
 
 	if p.SElinux != "" {
-		packages = append(packages, fmt.Sprintf("selinux-policy-%s", p.SElinux))
+		customizationPackages = append(customizationPackages, fmt.Sprintf("selinux-policy-%s", p.SElinux))
 	}
 
 	if p.OpenSCAPRemediationConfig != nil {
-		packages = append(packages, "openscap-scanner", "scap-security-guide", "xz")
+		customizationPackages = append(customizationPackages, "openscap-scanner", "scap-security-guide", "xz")
 	}
 
 	// Make sure the right packages are included for subscriptions
 	// rhc always uses insights, and depends on subscription-manager
 	// non-rhc uses subscription-manager and optionally includes Insights
 	if p.Subscription != nil {
-		packages = append(packages, "subscription-manager")
+		customizationPackages = append(customizationPackages, "subscription-manager")
 		if p.Subscription.Rhc {
-			packages = append(packages, "rhc", "insights-client", "rhc-worker-playbook")
+			customizationPackages = append(customizationPackages, "rhc", "insights-client", "rhc-worker-playbook")
 		} else if p.Subscription.Insights {
-			packages = append(packages, "insights-client")
+			customizationPackages = append(customizationPackages, "insights-client")
 		}
 	}
 
@@ -262,18 +268,42 @@ func (p *OS) getPackageSetChain(Distro) []rpmmd.PackageSet {
 		// should already have the required packages, but some minimal image
 		// types, like 'tar' don't, so let's add them for the stage to run and
 		// to enable user management in the image.
-		packages = append(packages, "shadow-utils", "pam", "passwd")
+		customizationPackages = append(customizationPackages, "shadow-utils", "pam", "passwd")
 
+	}
+
+	if p.Firewall != nil {
+		// Make sure firewalld is available in the image.
+		// org.osbuild.firewall runs 'firewall-offline-cmd' in the os tree
+		// using chroot, so we don't need a build package for this.
+		customizationPackages = append(customizationPackages, "firewalld")
 	}
 
 	osRepos := append(p.repos, p.ExtraBaseRepos...)
 
+	// merge all package lists for the pipeline
+	baseOSPackages := make([]string, 0)
+	baseOSPackages = append(baseOSPackages, platformPackages...)
+	baseOSPackages = append(baseOSPackages, environmentPackages...)
+	baseOSPackages = append(baseOSPackages, partitionTablePackages...)
+	baseOSPackages = append(baseOSPackages, p.BasePackages...)
+
 	chain := []rpmmd.PackageSet{
 		{
-			Include:         append(packages, p.ExtraBasePackages...),
+			Include:         baseOSPackages,
 			Exclude:         p.ExcludeBasePackages,
 			Repositories:    osRepos,
 			InstallWeakDeps: p.InstallWeakDeps,
+		},
+		{
+			// Depsolve customization packages separately to avoid conflicts with base
+			// package exclusion.
+			// See https://github.com/osbuild/images/issues/1323
+			Include:      customizationPackages,
+			Repositories: osRepos,
+			// Although 'false' is the default value, set it explicitly to make
+			// it visible that we are not adding weak dependencies.
+			InstallWeakDeps: false,
 		},
 	}
 
@@ -283,13 +313,15 @@ func (p *OS) getPackageSetChain(Distro) []rpmmd.PackageSet {
 			ps := rpmmd.PackageSet{
 				Include:      workloadPackages,
 				Repositories: append(osRepos, p.Workload.GetRepos()...),
+				// Although 'false' is the default value, set it explicitly to make
+				// it visible that we are not adding weak dependencies.
+				InstallWeakDeps: false,
 			}
 
 			workloadModules := p.Workload.GetEnabledModules()
 			if len(workloadModules) > 0 {
 				ps.EnabledModules = workloadModules
 			}
-
 			chain = append(chain, ps)
 		}
 	}
@@ -476,7 +508,9 @@ func (p *OS) serialize() osbuild.Pipeline {
 		}
 	}
 
-	pipeline.AddStage(osbuild.NewLocaleStage(&osbuild.LocaleStageOptions{Language: p.Language}))
+	if p.Language != "" {
+		pipeline.AddStage(osbuild.NewLocaleStage(&osbuild.LocaleStageOptions{Language: p.Language}))
+	}
 
 	if p.Keyboard != nil {
 		keymapOptions := &osbuild.KeymapStageOptions{Keymap: *p.Keyboard}
@@ -489,7 +523,10 @@ func (p *OS) serialize() osbuild.Pipeline {
 	if p.Hostname != "" {
 		pipeline.AddStage(osbuild.NewHostnameStage(&osbuild.HostnameStageOptions{Hostname: p.Hostname}))
 	}
-	pipeline.AddStage(osbuild.NewTimezoneStage(&osbuild.TimezoneStageOptions{Zone: p.Timezone}))
+
+	if p.Timezone != "" {
+		pipeline.AddStage(osbuild.NewTimezoneStage(&osbuild.TimezoneStageOptions{Zone: p.Timezone}))
+	}
 
 	if len(p.NTPServers) > 0 {
 		chronyOptions := &osbuild.ChronyStageOptions{Servers: p.NTPServers}
@@ -598,7 +635,11 @@ func (p *OS) serialize() osbuild.Pipeline {
 	}
 
 	if p.SshdConfig != nil {
-		pipeline.AddStage((osbuild.NewSshdConfigStage(p.SshdConfig)))
+		pipeline.AddStage(osbuild.NewSshdConfigStage(p.SshdConfig))
+	}
+
+	if p.InsightsClientConfig != nil {
+		pipeline.AddStage(osbuild.NewInsightsClientConfigStage(p.InsightsClientConfig))
 	}
 
 	if p.AuthConfig != nil {
@@ -633,7 +674,10 @@ func (p *OS) serialize() osbuild.Pipeline {
 	}
 
 	if pt := p.PartitionTable; pt != nil {
-		kernelOptions := osbuild.GenImageKernelOptions(p.PartitionTable)
+		rootUUID, kernelOptions, err := osbuild.GenImageKernelOptions(p.PartitionTable, p.MountUnits)
+		if err != nil {
+			panic(err)
+		}
 		kernelOptions = append(kernelOptions, p.KernelOptionsAppend...)
 
 		if p.FIPS {
@@ -644,15 +688,11 @@ func (p *OS) serialize() osbuild.Pipeline {
 			}))
 		}
 
-		if !p.KernelOptionsBootloader || p.platform.GetArch() == arch.ARCH_S390X {
-			pipeline = prependKernelCmdlineStage(pipeline, strings.Join(kernelOptions, " "), pt)
-		}
-
-		opts, err := osbuild.NewFSTabStageOptions(pt)
+		fsCfgStages, err := filesystemConfigStages(pt, p.MountUnits)
 		if err != nil {
 			panic(err)
 		}
-		pipeline.AddStage(osbuild.NewFSTabStage(opts))
+		pipeline.AddStages(fsCfgStages...)
 
 		var bootloader *osbuild.Stage
 		switch p.platform.GetArch() {
@@ -708,6 +748,10 @@ func (p *OS) serialize() osbuild.Pipeline {
 		}
 
 		pipeline.AddStage(bootloader)
+
+		if !p.KernelOptionsBootloader || p.platform.GetArch() == arch.ARCH_S390X {
+			pipeline = prependKernelCmdlineStage(pipeline, rootUUID, kernelOptions)
+		}
 	}
 
 	if p.RHSMFacts != nil {
@@ -890,13 +934,8 @@ func (p *OS) serialize() osbuild.Pipeline {
 	return pipeline
 }
 
-func prependKernelCmdlineStage(pipeline osbuild.Pipeline, kernelOptions string, pt *disk.PartitionTable) osbuild.Pipeline {
-	rootFs := pt.FindMountable("/")
-	if rootFs == nil {
-		panic("root filesystem must be defined for kernel-cmdline stage, this is a programming error")
-	}
-	rootFsUUID := rootFs.GetFSSpec().UUID
-	kernelStage := osbuild.NewKernelCmdlineStage(osbuild.NewKernelCmdlineStageOptions(rootFsUUID, kernelOptions))
+func prependKernelCmdlineStage(pipeline osbuild.Pipeline, rootUUID string, kernelOptions []string) osbuild.Pipeline {
+	kernelStage := osbuild.NewKernelCmdlineStage(osbuild.NewKernelCmdlineStageOptions(rootUUID, strings.Join(kernelOptions, " ")))
 	pipeline.Stages = append([]*osbuild.Stage{kernelStage}, pipeline.Stages...)
 	return pipeline
 }

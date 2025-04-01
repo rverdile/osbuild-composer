@@ -16,6 +16,7 @@ import (
 	"github.com/osbuild/images/pkg/datasizes"
 	"github.com/osbuild/images/pkg/disk"
 	"github.com/osbuild/images/pkg/distro"
+	"github.com/osbuild/images/pkg/experimentalflags"
 	"github.com/osbuild/images/pkg/image"
 	"github.com/osbuild/images/pkg/manifest"
 	"github.com/osbuild/images/pkg/platform"
@@ -25,7 +26,7 @@ import (
 
 type imageFunc func(workload workload.Workload, t *imageType, bp *blueprint.Blueprint, options distro.ImageOptions, packageSets map[string]rpmmd.PackageSet, containers []container.SourceSpec, rng *rand.Rand) (image.ImageKind, error)
 
-type packageSetFunc func(t *imageType) rpmmd.PackageSet
+type packageSetFunc func(t *imageType) (rpmmd.PackageSet, error)
 
 type isoLabelFunc func(t *imageType) string
 
@@ -42,7 +43,7 @@ type imageType struct {
 	packageSets            map[string]packageSetFunc
 	defaultImageConfig     *distro.ImageConfig
 	defaultInstallerConfig *distro.InstallerConfig
-	kernelOptions          string
+	kernelOptions          []string
 	defaultSize            uint64
 	buildPipelines         []string
 	payloadPipelines       []string
@@ -232,7 +233,11 @@ func (t *imageType) Manifest(bp *blueprint.Blueprint,
 	// don't add any static packages if Minimal was selected
 	if !bp.Minimal {
 		for name, getter := range t.packageSets {
-			staticPackageSets[name] = getter(t)
+			pkgSet, err := getter(t)
+			if err != nil {
+				return nil, nil, err
+			}
+			staticPackageSets[name] = pkgSet
 		}
 	}
 
@@ -278,6 +283,16 @@ func (t *imageType) Manifest(bp *blueprint.Blueprint,
 		w = cw
 	}
 
+	if experimentalflags.Bool("no-fstab") {
+		if t.defaultImageConfig == nil {
+			t.defaultImageConfig = &distro.ImageConfig{
+				MountUnits: common.ToPtr(true),
+			}
+		} else {
+			t.defaultImageConfig.MountUnits = common.ToPtr(true)
+		}
+	}
+
 	containerSources := make([]container.SourceSpec, len(bp.Containers))
 	for idx, cont := range bp.Containers {
 		containerSources[idx] = container.SourceSpec{
@@ -299,6 +314,9 @@ func (t *imageType) Manifest(bp *blueprint.Blueprint,
 	}
 	mf := manifest.New()
 	mf.Distro = manifest.DISTRO_FEDORA
+	if options.UseBootstrapContainer {
+		mf.DistroBootstrapRef = bootstrapContainerFor(t)
+	}
 	_, err = img.InstantiateManifest(&mf, repos, t.arch.distro.runner, rng)
 	if err != nil {
 		return nil, nil, err
@@ -498,4 +516,20 @@ func (t *imageType) checkOptions(bp *blueprint.Blueprint, options distro.ImageOp
 	}
 
 	return warnings, nil
+}
+
+// XXX: this will become part of the yaml distro definitions, i.e.
+// the yaml will have a "bootstrap_ref" key for each distro/arch
+func bootstrapContainerFor(t *imageType) string {
+	arch := t.arch.Name()
+	distro := t.arch.distro
+
+	// XXX: remove once fedora containers are part of the upstream
+	// fedora registry (and can be validated via tls)
+	if arch == "riscv64" {
+		return "ghcr.io/mvo5/fedora-buildroot:" + distro.OsVersion()
+	}
+
+	// we need fedora-toolbox to get python3
+	return "registry.fedoraproject.org/fedora-toolbox:" + distro.OsVersion()
 }

@@ -11,12 +11,11 @@ import (
 	"github.com/osbuild/images/pkg/distro"
 	"github.com/osbuild/images/pkg/distro/rhel"
 	"github.com/osbuild/images/pkg/osbuild"
-	"github.com/osbuild/images/pkg/rpmmd"
 )
 
-const (
-	ec2KernelOptions = "ro console=tty0 console=ttyS0,115200n8 net.ifnames=0 rd.blacklist=nouveau nvme_core.io_timeout=4294967295 crashkernel=auto LANG=en_US.UTF-8"
-)
+func ec2KernelOptions() []string {
+	return []string{"ro", "console=tty0", "console=ttyS0,115200n8", "net.ifnames=0", "rd.blacklist=nouveau", "nvme_core.io_timeout=4294967295", "crashkernel=auto", "LANG=en_US.UTF-8"}
+}
 
 func mkEc2ImgTypeX86_64() *rhel.ImageType {
 	it := rhel.NewImageType(
@@ -24,7 +23,7 @@ func mkEc2ImgTypeX86_64() *rhel.ImageType {
 		"image.raw.xz",
 		"application/xz",
 		map[string]rhel.PackageSetFunc{
-			rhel.OSPkgsKey: ec2PackageSet,
+			rhel.OSPkgsKey: packageSetLoader,
 		},
 		rhel.DiskImage,
 		[]string{"build"},
@@ -37,7 +36,7 @@ func mkEc2ImgTypeX86_64() *rhel.ImageType {
 
 	it.Compression = "xz"
 	it.DefaultImageConfig = ec2ImageConfig()
-	it.KernelOptions = ec2KernelOptions
+	it.KernelOptions = ec2KernelOptions()
 	it.Bootable = true
 	it.DefaultSize = 10 * datasizes.GibiByte
 	it.BasePartitionTables = ec2PartitionTables
@@ -194,63 +193,6 @@ func ec2ImageConfig() *distro.ImageConfig {
 			hostnameFile,
 		},
 		SELinuxForceRelabel: common.ToPtr(true),
-	}
-}
-
-func ec2PackageSet(t *rhel.ImageType) rpmmd.PackageSet {
-	return rpmmd.PackageSet{
-		Include: []string{
-			"@core",
-			"authconfig",
-			"kernel",
-			"yum-utils",
-			"cloud-init",
-			"dracut-config-generic",
-			"dracut-norescue",
-			"grub2",
-			"tar",
-			"rsync",
-			"rh-amazon-rhui-client",
-			"redhat-cloud-client-configuration",
-			"chrony",
-			"cloud-utils-growpart",
-			"gdisk",
-		},
-		Exclude: []string{
-			"aic94xx-firmware",
-			"alsa-firmware",
-			"alsa-lib",
-			"alsa-tools-firmware",
-			"ivtv-firmware",
-			"iwl1000-firmware",
-			"iwl100-firmware",
-			"iwl105-firmware",
-			"iwl135-firmware",
-			"iwl2000-firmware",
-			"iwl2030-firmware",
-			"iwl3160-firmware",
-			"iwl3945-firmware",
-			"iwl4965-firmware",
-			"iwl5000-firmware",
-			"iwl5150-firmware",
-			"iwl6000-firmware",
-			"iwl6000g2a-firmware",
-			"iwl6000g2b-firmware",
-			"iwl6050-firmware",
-			"iwl7260-firmware",
-			"libertas-sd8686-firmware",
-			"libertas-sd8787-firmware",
-			"libertas-usb8388-firmware",
-			"biosdevname",
-			"plymouth",
-			// NM is excluded by the original KS, but it is in the image built from it.
-			// "NetworkManager",
-			"iprutils",
-			// linux-firmware is uninstalled by the original KS, but it is a direct dependency of kernel,
-			// so we can't exclude it.
-			// "linux-firmware",
-			"firewalld",
-		},
 	}
 }
 

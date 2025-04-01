@@ -74,7 +74,7 @@ func (img *OSTreeSimplifiedInstaller) InstantiateManifest(m *manifest.Manifest,
 	repos []rpmmd.RepoConfig,
 	runner runner.Runner,
 	rng *rand.Rand) (*artifact.Artifact, error) {
-	buildPipeline := manifest.NewBuild(m, runner, repos, nil)
+	buildPipeline := addBuildBootstrapPipelines(m, runner, repos, nil)
 	buildPipeline.Checkpoint()
 
 	imageFilename := "image.raw.xz"
@@ -156,7 +156,9 @@ func (img *OSTreeSimplifiedInstaller) InstantiateManifest(m *manifest.Manifest,
 
 	isoPipeline := manifest.NewISO(buildPipeline, isoTreePipeline, isoLabel)
 	isoPipeline.SetFilename(img.Filename)
-	isoPipeline.ISOLinux = isoLinuxEnabled
+	if isoLinuxEnabled {
+		isoPipeline.ISOBoot = manifest.SyslinuxISOBoot
+	}
 
 	artifact := isoPipeline.Export()
 	return artifact, nil
