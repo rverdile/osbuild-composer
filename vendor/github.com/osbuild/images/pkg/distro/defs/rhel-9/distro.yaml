@@ -362,6 +362,22 @@
           include:
             - "dmidecode"
 
+image_config:
+  default:
+    default_kernel: "kernel"
+    default_oscap_datastream: "/usr/share/xml/scap/ssg/content/ssg-rhel9-ds.xml"
+    install_weak_deps: true
+    locale: "C.UTF-8"
+    sysconfig:
+      networking: true
+      no_zero_conf: true
+    timezone: "America/New_York"
+    update_default_kernel: true
+  condition:
+    distro_name:
+      centos:
+        default_oscap_datastream: "/usr/share/xml/scap/ssg/content/ssg-cs9-ds.xml"
+
 image_types:
   # XXX: not a real pkgset but the "os" pipeline pkgset for image-installer
   # find a nicer way to represent this
@@ -561,6 +577,10 @@ image_types:
             rhel:
               include:
                 - "insights-client"
+          version_greater_or_equal:
+            "9.6":
+              exclude:
+                - "microcode_ctl"
 
   azure_rhui: *vhd
 
@@ -647,6 +667,7 @@ image_types:
           - "hostname"
           - "langpacks-en"
           - "libcurl-minimal"
+          - "openssh-server"
           - "openssl"
           - "pam"
           - "passwd"
@@ -660,6 +681,7 @@ image_types:
           - "setup"
           - "shadow-utils"
           - "subscription-manager"
+          - "sudo"
           - "systemd"
           - "tar"
           - "tpm2-tss"

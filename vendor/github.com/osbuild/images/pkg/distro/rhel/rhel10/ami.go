@@ -203,18 +203,12 @@ func defaultEc2ImageConfig() *distro.ImageConfig {
 			"reboot.target",
 			"tuned",
 		},
-		DefaultTarget: common.ToPtr("multi-user.target"),
-		Sysconfig: []*osbuild.SysconfigStageOptions{
-			{
-				Kernel: &osbuild.SysconfigKernelOptions{
-					UpdateDefault: true,
-					DefaultKernel: "kernel",
-				},
-				Network: &osbuild.SysconfigNetworkOptions{
-					Networking: true,
-					NoZeroConf: true,
-				},
-			},
+		DefaultTarget:       common.ToPtr("multi-user.target"),
+		UpdateDefaultKernel: common.ToPtr(true),
+		DefaultKernel:       common.ToPtr("kernel"),
+		Sysconfig: &distro.Sysconfig{
+			Networking: true,
+			NoZeroConf: true,
 		},
 		SystemdLogind: []*osbuild.SystemdLogindStageOptions{
 			{
@@ -249,6 +243,13 @@ func defaultEc2ImageConfig() *distro.ImageConfig {
 				Filename: "blacklist-amdgpu.conf",
 				Commands: osbuild.ModprobeConfigCmdList{
 					osbuild.NewModprobeConfigCmdBlacklist("amdgpu"),
+				},
+			},
+			// https://issues.redhat.com/browse/RHEL-71926
+			{
+				Filename: "blacklist-i2c_piix4.conf",
+				Commands: osbuild.ModprobeConfigCmdList{
+					osbuild.NewModprobeConfigCmdBlacklist("i2c_piix4"),
 				},
 			},
 		},

@@ -4,6 +4,8 @@ go 1.22.8
 
 exclude github.com/mattn/go-sqlite3 v2.0.3+incompatible
 
+replace github.com/osbuild/images => /home/rverdile/dev/image-builder-dev/images
+
 require (
 	cloud.google.com/go/compute v1.33.0
 	cloud.google.com/go/storage v1.50.0
