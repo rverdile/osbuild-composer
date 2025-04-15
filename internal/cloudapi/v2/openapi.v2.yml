@@ -2222,6 +2222,14 @@ components:
           example: true
           description: |
             Optional flag to use rhc to register the system, which also always enables Insights.
+        template_uuid:
+          type: string
+          description: |
+            Optional value to register with a template when registering the system with Insights.
+        template_name:
+          type: string
+          description: |
+            Optional value to register with a template when using rhc to register the system with Insights.
     User:
       type: object
       additionalProperties: false
